@@ -43,6 +43,7 @@ build-backend = "setuptools.build_meta"
 
 [project.scripts]
 build-collection = "openfisca_data_manager.scripts.build_collection:main"
+migrate-survey-manager-config = "openfisca_data_manager.scripts.migrate_config:main"
 
 [project.optional-dependencies]
 dev = [
