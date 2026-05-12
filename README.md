@@ -4,6 +4,10 @@ Survey and administrative data access tools extracted from OpenFisca Survey Mana
 
 This package contains the data-management layer: configuration, survey collections, survey tables, readers, writers and data-cleaning helpers.
 
+## Configuration
+
+The target YAML configuration format is specified in [docs/configuration-v1.md](docs/configuration-v1.md).
+
 ## Development
 
 ```shell
