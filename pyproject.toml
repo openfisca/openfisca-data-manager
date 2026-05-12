@@ -46,8 +46,10 @@ build-collection = "openfisca_data_manager.scripts.build_collection:main"
 
 [project.optional-dependencies]
 dev = [
+    'openfisca-core >=44.6.0',
     'pytest',
     'pytest-cov',
+    'pytest-order',
     'ruff',
 ]
 sas = [
