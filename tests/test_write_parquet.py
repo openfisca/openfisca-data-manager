@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 from openfisca_data_manager.scripts.build_collection import build_survey_collection
 
@@ -129,3 +130,55 @@ tmp_directory = {data_dir / "tmp"}
         config_files_directory=str(data_dir),
         keep_original_parquet_file=True,
     )
+
+
+def test_build_collection_from_yaml_config(tmp_path: Path):
+    collection_name = "yaml_parquet_collection"
+    raw_dir = tmp_path / "raw" / collection_name
+    raw_dir.mkdir(parents=True)
+    collections_dir = tmp_path / "collections"
+    collections_dir.mkdir()
+
+    pd.DataFrame({"household_id": [1, 2], "rent": [1100, 2200]}).to_parquet(raw_dir / "household.parquet")
+    pd.DataFrame({"person_id": [11, 22], "household_id": [1, 2]}).to_parquet(raw_dir / "person.parquet")
+
+    (tmp_path / "data-manager.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "storage": {
+                    "collections_directory": str(collections_dir),
+                    "output_directory": str(tmp_path / "output"),
+                    "tmp_directory": str(tmp_path / "tmp"),
+                },
+                "defaults": {
+                    "store_format": "parquet",
+                    "source_format": "parquet",
+                },
+                "collections": {
+                    collection_name: {
+                        "metadata": f"{collection_name}.yaml",
+                        "raw_surveys": {
+                            "2020": str(raw_dir),
+                        },
+                    }
+                },
+            },
+            sort_keys=False,
+        )
+    )
+
+    survey_collection = build_survey_collection(
+        collection_name=collection_name,
+        config_files_directory=str(tmp_path),
+        data_directory_path_by_survey_suffix=None,
+        replace_metadata=True,
+        replace_data=True,
+        keep_original_parquet_file=True,
+    )
+
+    metadata = yaml.safe_load((collections_dir / f"{collection_name}.yaml").read_text())
+    assert survey_collection.json_file_path == collections_dir / f"{collection_name}.yaml"
+    assert f"{collection_name}_2020" in metadata["surveys"]
+    assert metadata["surveys"][f"{collection_name}_2020"]["parquet_file_path"] == str(raw_dir)
+    assert metadata["surveys"][f"{collection_name}_2020"]["tables"]["person"]["source_format"] == "parquet"

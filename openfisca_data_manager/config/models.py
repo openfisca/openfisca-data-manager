@@ -93,6 +93,26 @@ class Config(configparser.ConfigParser):
 
         yaml_config_path.write_text(yaml.safe_dump(yaml_config, sort_keys=False, allow_unicode=True))
 
+    def get_collection_raw_surveys(self, collection_name: str) -> dict[str, str]:
+        if self.yaml_config is None:
+            return {}
+        collection = self.yaml_config.get("collections", {}).get(collection_name, {})
+        raw_surveys = collection.get("raw_surveys", {})
+        return {
+            str(survey_suffix): _raw_survey_path(survey_definition)
+            for survey_suffix, survey_definition in raw_surveys.items()
+        }
+
+    def get_collection_defaults(self, collection_name: str) -> dict[str, Any]:
+        if self.yaml_config is None:
+            return {}
+        defaults = dict(self.yaml_config.get("defaults", {}))
+        collection = self.yaml_config.get("collections", {}).get(collection_name, {})
+        for option in ("source_format", "store_format", "categorical_strategy"):
+            if option in collection:
+                defaults[option] = collection[option]
+        return defaults
+
 
 def _resolve_path(path: Any, *, base_dir: Path) -> Path:
     path = Path(str(path)).expanduser()
@@ -108,3 +128,9 @@ def _resolve_metadata_path(path: Any, *, collections_directory: Path, config_dir
     if collections_directory.is_absolute():
         return collections_directory / path
     return config_directory / collections_directory / path
+
+
+def _raw_survey_path(survey_definition: Any) -> str:
+    if isinstance(survey_definition, dict):
+        return str(survey_definition.get("path"))
+    return str(survey_definition)

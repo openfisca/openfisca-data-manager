@@ -14,6 +14,7 @@ import sys
 import warnings
 from pathlib import Path
 
+from openfisca_data_manager.config.models import Config
 from openfisca_data_manager.config.paths import (
     default_config_files_directory,
     openfisca_data_manager_location,
@@ -115,7 +116,15 @@ def build_survey_collection(
     categorical_strategy="unique_labels",
 ):
     assert collection_name is not None
+    config = Config(config_files_directory=config_files_directory)
+    yaml_defaults = config.get_collection_defaults(collection_name)
+    if data_directory_path_by_survey_suffix is None:
+        data_directory_path_by_survey_suffix = config.get_collection_raw_surveys(collection_name)
     assert data_directory_path_by_survey_suffix is not None
+    assert data_directory_path_by_survey_suffix, "A list of surveys to process is needed"
+    configured_source_format = yaml_defaults.get("source_format")
+    store_format = yaml_defaults.get("store_format", store_format)
+    categorical_strategy = yaml_defaults.get("categorical_strategy", categorical_strategy)
     surveys_name = list(data_directory_path_by_survey_suffix.keys())
     assert surveys_name is not None, "A list of surveys to process is needed"
 
@@ -148,7 +157,7 @@ def build_survey_collection(
             _format for _format in list(data_file_by_format.keys()) if data_file_by_format.get(_format)
         ]
         log.info(f"Valid source formats are: {valid_source_format}")
-        source_format = valid_source_format[0]
+        source_format = configured_source_format or valid_source_format[0]
         log.info(f"Using the following format: {source_format}")
         collections_directory = survey_collection.config.get("collections", "collections_directory")
         if Path(collections_directory).is_dir() is False:
@@ -156,8 +165,8 @@ def build_survey_collection(
                 f"{collections_directory} who should be the collections' directory does not exist. Creating directory."
             )
             Path(collections_directory).mkdir()
-        collection_json_path = Path(collections_directory) / f"{collection_name}.json"
-        survey_collection.dump(json_file_path=collection_json_path)
+        collection_metadata_path = _collection_metadata_path(survey_collection, collection_name, config)
+        survey_collection.dump(json_file_path=collection_metadata_path)
         surveys = []
         for survey in survey_collection.surveys:
             if survey.name.endswith(str(survey_suffix)) and survey.name.startswith(collection_name):
@@ -172,6 +181,16 @@ def build_survey_collection(
             categorical_strategy=categorical_strategy,
         )
     return survey_collection
+
+
+def _collection_metadata_path(survey_collection: SurveyCollection, collection_name: str, config: Config) -> Path:
+    if survey_collection.json_file_path is not None:
+        return Path(survey_collection.json_file_path)
+    if config.has_option("collections", collection_name):
+        return Path(config.get("collections", collection_name))
+    collections_directory = Path(config.get("collections", "collections_directory"))
+    extension = ".yaml" if config.yaml_config is not None else ".json"
+    return collections_directory / f"{collection_name}{extension}"
 
 
 def check_template_config_files(config_files_directory: str):
@@ -265,15 +284,21 @@ def main():
 
     config_files_directory = args.path or default_config_files_directory
 
-    if not check_template_config_files(config_files_directory=config_files_directory):
+    yaml_config_path = Path(config_files_directory) / "data-manager.yaml"
+    if not yaml_config_path.exists() and not check_template_config_files(
+        config_files_directory=config_files_directory
+    ):
         return
 
-    config_parser = configparser.ConfigParser()
-    config_parser.read(Path(config_files_directory) / "raw_data.ini")
-    assert config_parser.has_section(args.collection), (
-        f"{args.collection} is an unkown collection. Please add a section to raw_data.ini configuration file"
-    )
-    data_directory_path_by_survey_suffix = dict(config_parser.items(args.collection))
+    config = Config(config_files_directory=config_files_directory)
+    data_directory_path_by_survey_suffix = config.get_collection_raw_surveys(args.collection)
+    if not data_directory_path_by_survey_suffix:
+        config_parser = configparser.ConfigParser()
+        config_parser.read(Path(config_files_directory) / "raw_data.ini")
+        assert config_parser.has_section(args.collection), (
+            f"{args.collection} is an unkown collection. Please add it to data-manager.yaml or raw_data.ini"
+        )
+        data_directory_path_by_survey_suffix = dict(config_parser.items(args.collection))
     if args.survey is not None:
         assert args.survey in data_directory_path_by_survey_suffix, (
             f"Unknown survey data directory for {args.collection}"
@@ -285,9 +310,10 @@ def main():
     start_time = datetime.datetime.now()
 
     # Determine store format based on argument
-    store_format = "parquet" if args.parquet else "hdf5"
+    yaml_defaults = config.get_collection_defaults(args.collection)
+    store_format = "parquet" if args.parquet else yaml_defaults.get("store_format", "hdf5")
 
-    if not args.parquet:
+    if store_format != "parquet":
         warnings.warn(
             "HDF5 will no longer be the default format in a future version. "
             "Please use --parquet option to save data in parquet format.",
@@ -305,7 +331,7 @@ def main():
             data_directory_path_by_survey_suffix=data_directory_path_by_survey_suffix,
             replace_metadata=args.replace_metadata,
             replace_data=args.replace_data,
-            source_format="sas",
+            source_format=yaml_defaults.get("source_format"),
             config_files_directory=config_files_directory,
             keep_original_parquet_file=args.keep_original_parquet_file,
             encoding=args.encoding,
