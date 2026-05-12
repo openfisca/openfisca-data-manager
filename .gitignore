@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Test and tool caches
+.coverage
+.pytest_cache/
+.ruff_cache/
+
+# Local config/data files
+.config/
+config.ini
+raw_data.ini
+*.h5
+*.parquet

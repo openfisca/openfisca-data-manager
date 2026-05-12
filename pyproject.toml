@@ -1,0 +1,80 @@
+[project]
+name = "OpenFisca-Data-Manager"
+version = "7.0.0"
+description = "Survey and administrative data management tools for OpenFisca"
+readme = "README.md"
+keywords = ["microsimulation", "survey", "data", "openfisca"]
+authors = [
+  {name = "OpenFisca Team", email = "contact@openfisca.fr"},
+]
+license = "AGPL-3.0-or-later"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Operating System :: POSIX",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+requires-python = ">= 3.9"
+dependencies = [
+    'chardet >=5.1.0, < 6.0',
+    'configparser >=5.3.0, < 8.0',
+    'numpy >=1.24.2, <2.0; python_version < "3.11"',
+    'numpy >=1.26.0, <=3.0; python_version <= "3.12"',
+    'numpy >=2.1.0, <=3.0; python_version >= "3.13"',
+    'pandas >=2.0.3, < 3.0',
+    'pyarrow >=13.0.0, < 19.0.0',
+    'pyxdg >=0.28, < 0.29',
+    'PyYAML >=6.0, < 7.0',
+    'tables >=3.8.0, < 4.0',
+]
+
+[project.urls]
+Homepage = "https://github.com/openfisca/openfisca-data-manager"
+Repository = "https://github.com/openfisca/openfisca-data-manager"
+Issues = "https://github.com/openfisca/openfisca-data-manager/issues"
+
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+build-collection = "openfisca_data_manager.scripts.build_collection:main"
+
+[project.optional-dependencies]
+dev = [
+    'pytest',
+    'pytest-cov',
+    'ruff',
+]
+sas = [
+    'pyreadstat >=1.2.1, < 1.3',
+    'sas7bdat >=2.2.3, < 3.0',
+]
+
+[tool.ruff]
+line-length = 119
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I001", "B", "A", "C4", "T20", "SIM", "PTH", "N"]
+ignore = [
+    "N801",
+    "N805",
+]
+
+[tool.pytest.ini_options]
+testpaths = "tests"
+python_files = ["test_*.py"]
+
+[tool.setuptools.packages.find]
+include = ["openfisca_data_manager*"]
+
+[tool.setuptools.package-data]
+openfisca_data_manager = [
+    "py.typed",
+    "config_files_templates/config_template.ini",
+    "config_files_templates/raw_data_template.ini",
+]
