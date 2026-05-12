@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+import yaml
 
 from openfisca_data_manager.scripts.migrate_config import migrate_config
 
@@ -19,6 +20,34 @@ tmp_directory = {directory / "openfisca-survey-manager-tmp"}
 """.strip()
     )
     (collections_directory / "fake.json").write_text('{"name": "fake", "surveys": {}}')
+
+
+def write_collection_json(directory: Path) -> None:
+    (directory / "fake.json").write_text(
+        """
+{
+  "name": "fake",
+  "label": "Fake collection",
+  "surveys": {
+    "fake_2020": {
+      "name": "fake_2020",
+      "label": "Fake 2020",
+      "parquet_file_path": "/tmp/openfisca-survey-manager/fake_2020",
+      "informations": {
+        "parquet_files": ["/tmp/openfisca-survey-manager/raw/person.parquet"]
+      },
+      "tables": {
+        "person": {
+          "source_format": "parquet",
+          "variables": ["person_id"],
+          "parquet_file": "/tmp/openfisca-survey-manager/fake_2020/person.parquet"
+        }
+      }
+    }
+  }
+}
+""".strip()
+    )
 
 
 def test_migrate_config_copies_ini_files(tmp_path):
@@ -95,3 +124,84 @@ def test_migrate_config_validates_required_sections(tmp_path):
 
     with pytest.raises(ValueError, match="Missing section"):
         migrate_config(source=source, target=target, dry_run=True)
+
+
+def test_migrate_config_writes_yaml_from_ini_files(tmp_path):
+    source = tmp_path / "openfisca-survey-manager"
+    target = tmp_path / "openfisca-data-manager"
+    source.mkdir()
+    write_config(source)
+    (source / "raw_data.ini").write_text("[fake]\n2020 = /raw/fake/2020\n")
+
+    migrate_config(source=source, target=target, output_format="yaml")
+
+    data = yaml.safe_load((target / "data-manager.yaml").read_text())
+    assert data["version"] == 1
+    assert data["storage"]["collections_directory"] == str(source)
+    assert data["collections"]["fake"]["metadata"].endswith("fake.json")
+    assert data["collections"]["fake"]["raw_surveys"] == {"2020": "/raw/fake/2020"}
+    assert not (target / "config.ini").exists()
+
+
+def test_migrate_config_writes_yaml_with_rewritten_paths(tmp_path):
+    source = tmp_path / "openfisca-survey-manager"
+    target = tmp_path / "openfisca-data-manager"
+    source.mkdir()
+    write_config(source)
+
+    migrate_config(source=source, target=target, rewrite_paths=True, output_format="yaml")
+
+    data = yaml.safe_load((target / "data-manager.yaml").read_text())
+    assert "openfisca-data-manager" in data["storage"]["output_directory"]
+    assert data["collections"]["fake"]["metadata"].endswith("fake.json")
+
+
+def test_migrate_config_yaml_without_collections_keeps_json_metadata(tmp_path):
+    source = tmp_path / "openfisca-survey-manager"
+    target = tmp_path / "openfisca-data-manager"
+    source.mkdir()
+    write_config(source)
+
+    migrate_config(source=source, target=target, output_format="yaml")
+
+    data = yaml.safe_load((target / "data-manager.yaml").read_text())
+    assert data["collections"]["fake"]["metadata"].endswith("fake.json")
+    assert not (target / "fake.yaml").exists()
+
+
+def test_migrate_config_yaml_with_collections_converts_json_metadata(tmp_path):
+    source = tmp_path / "openfisca-survey-manager"
+    target = tmp_path / "openfisca-data-manager"
+    source.mkdir()
+    write_config(source)
+    write_collection_json(source)
+
+    migrate_config(source=source, target=target, output_format="yaml", convert_collections=True)
+
+    data = yaml.safe_load((target / "data-manager.yaml").read_text())
+    collection_data = yaml.safe_load((target / "collections" / "fake.yaml").read_text())
+    assert data["collections"]["fake"]["metadata"].endswith("fake.yaml")
+    assert collection_data["version"] == 1
+    assert collection_data["name"] == "fake"
+    assert collection_data["surveys"]["fake_2020"]["label"] == "Fake 2020"
+    assert collection_data["surveys"]["fake_2020"]["tables"]["person"]["variables"] == ["person_id"]
+
+
+def test_migrate_config_yaml_with_collections_rewrites_nested_paths(tmp_path):
+    source = tmp_path / "openfisca-survey-manager"
+    target = tmp_path / "openfisca-data-manager"
+    source.mkdir()
+    write_config(source)
+    write_collection_json(source)
+
+    migrate_config(
+        source=source,
+        target=target,
+        rewrite_paths=True,
+        output_format="yaml",
+        convert_collections=True,
+    )
+
+    collection_text = (target / "collections" / "fake.yaml").read_text()
+    assert "openfisca-data-manager" in collection_text
+    assert "openfisca-survey-manager" not in collection_text
