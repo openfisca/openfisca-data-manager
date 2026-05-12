@@ -88,9 +88,9 @@ Contains the following tables : \n"""
         return header + tables + informations
 
     @classmethod
-    def create_from_json(cls, survey_json: dict) -> Survey:
+    def create_from_json(cls, survey_json: dict, name: Optional[str] = None) -> Survey:
         self = cls(
-            name=survey_json.get("name"),
+            name=survey_json.get("name", name),
             label=survey_json.get("label"),
             hdf5_file_path=survey_json.get("hdf5_file_path"),
             parquet_file_path=survey_json.get("parquet_file_path"),

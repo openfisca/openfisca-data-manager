@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 import pandas as pd
+import yaml
 
 from openfisca_data_manager.config.models import Config
 from openfisca_data_manager.config.paths import default_config_files_directory
@@ -89,8 +90,7 @@ Contains the following surveys :
 
         config.set("collections", self.name, str(self.json_file_path))
         config.save()
-        with codecs.open(str(self.json_file_path), "w", encoding="utf-8") as _file:
-            json.dump(self.to_json(), _file, ensure_ascii=False, indent=2)
+        _dump_collection_metadata(Path(self.json_file_path), self.to_json())
 
     def fill_store(
         self,
@@ -149,22 +149,19 @@ Contains the following surveys :
                 log.error(error)
                 raise SurveyConfigError(msg) from error
 
-        with Path(json_file_path).open("r") as _file:
-            self_json = json.load(_file)
-            name = self_json["name"]
+        self_json = _load_collection_metadata(Path(json_file_path))
+        name = self_json["name"]
 
         self = cls(config_files_directory=config_files_directory, name=name)
         self.config = config
-        with Path(json_file_path).open("r") as _file:
-            self_json = json.load(_file)
-            self.json_file_path = json_file_path
-            self.label = self_json.get("label")
-            self.name = self_json.get("name")
+        self.json_file_path = json_file_path
+        self.label = self_json.get("label")
+        self.name = self_json.get("name")
 
         surveys = self_json["surveys"]
         for survey_name, survey_json in surveys.items():
             survey = Survey(name=survey_name)
-            self.surveys.append(survey.create_from_json(survey_json))
+            self.surveys.append(survey.create_from_json(survey_json, name=survey_name))
         return self
 
     def to_json(self) -> dict:
@@ -202,3 +199,29 @@ def load_table(
             filter_by=filter_by,
         )
     return survey_.get_values(table=table, variables=variables, filter_by=filter_by)
+
+
+def _load_collection_metadata(metadata_path: Path) -> dict:
+    with metadata_path.open("r") as metadata_file:
+        if metadata_path.suffix in {".yaml", ".yml"}:
+            return yaml.safe_load(metadata_file) or {}
+        return json.load(metadata_file)
+
+
+def _dump_collection_metadata(metadata_path: Path, metadata: dict) -> None:
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    if metadata_path.suffix in {".yaml", ".yml"}:
+        metadata_path.write_text(yaml.safe_dump(_to_plain_dict(metadata), sort_keys=False, allow_unicode=True))
+        return
+    with codecs.open(str(metadata_path), "w", encoding="utf-8") as metadata_file:
+        json.dump(metadata, metadata_file, ensure_ascii=False, indent=2)
+
+
+def _to_plain_dict(value):
+    if isinstance(value, collections.OrderedDict):
+        return {key: _to_plain_dict(item) for key, item in value.items()}
+    if isinstance(value, dict):
+        return {key: _to_plain_dict(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_to_plain_dict(item) for item in value]
+    return value
