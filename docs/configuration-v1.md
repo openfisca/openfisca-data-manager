@@ -268,18 +268,19 @@ The loader should support three combinations during the transition:
 
 The canonical format is YAML global config + YAML collection metadata.
 
-## Migration CLI Roadmap
+## Migration CLI
 
-The existing `migrate-survey-manager-config` command currently performs a safe INI-to-INI migration. It should grow these options:
+The `migrate-survey-manager-config` command supports both conservative INI migration and YAML migration:
 
 ```shell
+migrate-survey-manager-config
 migrate-survey-manager-config --format yaml
 migrate-survey-manager-config --format yaml --collections
 ```
 
-`--format yaml` should create `data-manager.yaml` from `config.ini` and `raw_data.ini`.
+`--format yaml` creates `data-manager.yaml` from `config.ini` and `raw_data.ini`.
 
-`--format yaml --collections` should also convert referenced collection JSON files to collection YAML files.
+`--format yaml --collections` also converts referenced collection JSON files to collection YAML files.
 
 The old files must not be deleted by the migration command.
 

@@ -8,6 +8,8 @@ This package contains the data-management layer: configuration, survey collectio
 
 The target YAML configuration format is specified in [docs/configuration-v1.md](docs/configuration-v1.md).
 
+To migrate existing OpenFisca Survey Manager configuration files, see [docs/migrate-from-survey-manager.md](docs/migrate-from-survey-manager.md).
+
 ## Development
 
 ```shell
