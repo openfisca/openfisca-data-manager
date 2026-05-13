@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import yaml
 
+from openfisca_data_manager.core.dataset import SurveyCollection
+from openfisca_data_manager.scripts.build_collection import build_survey_collection
 from openfisca_data_manager.scripts.migrate_config import migrate_config
 
 
@@ -205,3 +208,38 @@ def test_migrate_config_yaml_with_collections_rewrites_nested_paths(tmp_path):
     collection_text = (target / "collections" / "fake.yaml").read_text()
     assert "openfisca-data-manager" in collection_text
     assert "openfisca-survey-manager" not in collection_text
+
+
+def test_migrate_yaml_collections_then_build_collection(tmp_path):
+    source = tmp_path / "openfisca-survey-manager"
+    target = tmp_path / "openfisca-data-manager"
+    raw_dir = tmp_path / "raw" / "fake" / "2020"
+    source.mkdir()
+    raw_dir.mkdir(parents=True)
+    write_config(source)
+    write_collection_json(source)
+    (source / "raw_data.ini").write_text(f"[fake]\n2020 = {raw_dir}\n")
+    pd.DataFrame({"person_id": [1, 2], "salary": [1000, 2000]}).to_parquet(raw_dir / "person.parquet")
+
+    migrate_config(
+        source=source,
+        target=target,
+        rewrite_paths=True,
+        output_format="yaml",
+        convert_collections=True,
+    )
+    build_survey_collection(
+        collection_name="fake",
+        config_files_directory=str(target),
+        data_directory_path_by_survey_suffix=None,
+        replace_metadata=True,
+        replace_data=True,
+        keep_original_parquet_file=True,
+    )
+
+    collection = SurveyCollection.load(collection="fake", config_files_directory=target)
+    survey = collection.get_survey("fake_2020")
+    data_frame = survey.get_values(table="person")
+
+    assert collection.json_file_path == str(target / "collections" / "fake.yaml")
+    assert data_frame["salary"].tolist() == [1000, 2000]
